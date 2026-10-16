@@ -55,6 +55,18 @@ func TestScmBranchRemotePanels(t *testing.T) {
 	if !hs.tt.HasText("REPOSITORY") || !hs.tt.HasText("BRANCHES") {
 		t.Fatalf("panel headings missing: %q", hs.tt.Texts())
 	}
+	lastCommit, repository := -1, -1
+	for i, row := range a.scmRows() {
+		if row.key == "group:commits" || row.commit != nil && row.panel == nil && row.at >= 0 {
+			lastCommit = i
+		}
+		if row.key == "panel:tabs" {
+			repository = i
+		}
+	}
+	if lastCommit < 0 || repository <= lastCommit {
+		t.Fatalf("Repository must follow commit history: last commit=%d repository=%d", lastCommit, repository)
+	}
 	main := findPanelRow(t, hs, "panel:branch:refs/heads/main")
 	if !main.panel.branch.Current || main.panel.branch.Upstream != "origin/main" {
 		t.Fatalf("branch metadata: %+v", main.panel.branch)

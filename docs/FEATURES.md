@@ -226,7 +226,7 @@ next start.
 
 ### Branches and remotes
 
-Source Control's **REPOSITORY** panel starts collapsed and remembers whether it is open and its selected tab.
+Source Control's **REPOSITORY** panel sits below **COMMITS**, starts collapsed and remembers whether it is open and its selected tab.
 **Branches** lists the current branch first, then the most recently committed branches, with their upstream and ahead/behind
 counts. Expand a branch for its history and any incoming or outgoing commits; **Load more** reads another page.
 **Remotes** lists the configured remotes. Expand a remote to read its fetch and push URLs and remote branches.

@@ -119,7 +119,7 @@ func groupStatus(st *git.Status) [groupCount][]git.Entry {
 }
 
 // scmRows returns the rows of the view: the groups that have files, and
-// the files of those open, then the last commits. They are made again
+// the files of those open, then the last commits and repository panel. They are made again
 // only when the status, the groups closed or the history change.
 func (a *app) scmRows() []scmRow {
 	s := &a.scm
@@ -147,7 +147,6 @@ func (a *app) scmRows() []scmRow {
 			rows = append(rows, scmRow{group: scmGroup(g), e: e, key: fmt.Sprintf("%d:%s", g, e.Path)})
 		}
 	}
-	rows = a.scmPanelRows(rows)
 	if h := g.history; len(h) > 0 {
 		rows = append(rows, scmRow{group: groupCommits, header: true, count: len(h), key: "group:commits"})
 		if !s.collapsed[groupCommits] {
@@ -159,6 +158,7 @@ func (a *app) scmRows() []scmRow {
 			}
 		}
 	}
+	rows = a.scmPanelRows(rows)
 	s.rowsPanels = s.panels.gen
 	s.rows, s.rowsOf, s.rowsCollapsed, s.rowsHistory = rows, g.status, s.collapsed, g.historyGen
 	s.rowsDirs, s.rowsTree = s.dirsGen, tree

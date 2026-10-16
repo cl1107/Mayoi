@@ -30,8 +30,11 @@ needs a `## <version>` section here, or its build fails.
 - Git work still running in a folder you switch away from no longer lands
   in the new folder's Source Control, where it cleared its busy message or
   loading state and ran its follow-ups.
-- Source Control adds Branches and Remotes in a repository panel, initially
-  collapsed, with branch histories and commands to manage branches and remotes.
+- Source Control has a **Repository** section below the commits, closed at
+  first, whose **Branches** and **Remotes** list each branch with its
+  upstream and history, and each remote with its URLs and branches; their
+  menus check out, pull, create, rename, delete, merge and rebase branches,
+  and add, edit, fetch, prune and remove remotes.
 - Selecting a file anywhere in its Explorer row switches to its editor,
   including clicks in the space beside its name, and moving through the
   Explorer with the arrow keys previews each file in turn.
