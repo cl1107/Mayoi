@@ -13,7 +13,7 @@ type commitTools struct {
 	selected string
 }
 
-func (a *app) commitToolsMenu(m *ui.Menu, cm git.Commit, action *func()) {
+func (a *app) commitToolsMenu(m *ui.Menu, cm git.Commit, head bool, action *func()) {
 	m.Separator()
 	if m.Item("Create Patch…").Chosen() {
 		*action = func() { a.commitPatch(cm, true) }
@@ -22,10 +22,11 @@ func (a *app) commitToolsMenu(m *ui.Menu, cm git.Commit, action *func()) {
 		*action = func() { a.commitPatch(cm, false) }
 	}
 	m.Separator()
-	if m.Item("Compare HEAD to Here").Chosen() {
+	// HEAD compared with itself, or a commit with itself, has nothing to show.
+	if m.Item("Compare HEAD to Here").Disabled(head).Chosen() {
 		*action = func() { a.compareRevisions("HEAD", cm.Hash) }
 	}
-	if m.Item("Compare Here to HEAD").Chosen() {
+	if m.Item("Compare Here to HEAD").Disabled(head).Chosen() {
 		*action = func() { a.compareRevisions(cm.Hash, "HEAD") }
 	}
 	if m.Item("Select for Compare").Chosen() {
@@ -33,7 +34,7 @@ func (a *app) commitToolsMenu(m *ui.Menu, cm git.Commit, action *func()) {
 	}
 	selected := a.commitTools
 	if selected.repo == a.git.repo && selected.selected != "" {
-		if m.Item("Compare with Selected (" + git.ShortHash(selected.selected) + ")").Chosen() {
+		if m.Item("Compare with Selected (" + git.ShortHash(selected.selected) + ")").Disabled(selected.selected == cm.Hash).Chosen() {
 			*action = func() { a.compareRevisions(selected.selected, cm.Hash) }
 		}
 	}
@@ -41,6 +42,15 @@ func (a *app) commitToolsMenu(m *ui.Menu, cm git.Commit, action *func()) {
 	if m.Item("Open Commit on Remote").Chosen() {
 		*action = func() { a.commitRemote(cm) }
 	}
+}
+
+// revisionName is how a revision of a comparison is named: a commit by
+// its short hash, HEAD as it is.
+func revisionName(rev string) string {
+	if rev == "HEAD" {
+		return rev
+	}
+	return git.ShortHash(rev)
 }
 
 // Comparisons open as a syntax-highlighted patch document, so binary changes,
@@ -55,12 +65,12 @@ func (a *app) compareRevisions(from, to string) {
 		if a.git.repo != r {
 			return
 		}
-		end := to
+		name := revisionName(from) + " → " + revisionName(to)
 		if patch == "" {
-			a.tell(note{message: "No differences: " + from + " → " + end})
+			a.tell(note{message: "No differences: " + name})
 			return
 		}
-		a.openGitText(from+" → "+end+".diff", patch)
+		a.openGitText(name+".diff", patch)
 	})
 }
 
@@ -86,6 +96,7 @@ func (a *app) commitPatch(cm git.Commit, save bool) {
 		}
 		if !save {
 			a.services.WriteClipboard(patch)
+			a.tell(note{message: "Copied the patch of " + cm.Short()})
 			return
 		}
 		a.askSavePath(cm.Short()+".patch", func(path string) {

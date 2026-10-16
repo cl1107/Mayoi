@@ -64,6 +64,9 @@ func TestCommitToolsMenuAndComparison(t *testing.T) {
 	if ed := a.activeEditor(); ed == nil || !strings.Contains(ed.buf.String(), "-// comparison result") || !strings.Contains(ed.document.title, " → ") {
 		t.Fatal("missing directed comparison patch")
 	}
+	if got, want := a.activeEditor().document.title, cm.Short()+" → "+parent.Short()+".diff"; got != want {
+		t.Fatalf("comparison named %q, want %q", got, want)
+	}
 	a.commitPatch(cm, false)
 	hs.settleGit()
 	if got := tt.Clipboard(); !strings.Contains(got, "+// comparison result") {
