@@ -69,6 +69,8 @@ type gitState struct {
 	history        []git.Commit
 	unpushed       map[string]bool
 	historyOf      string
+	historyRef     string // optional commit anchoring a revealed history
+	historyRefOf   string // HEAD and branch when that history was revealed
 	historyN       int
 	historyGen     int
 	loadingHistory bool
@@ -135,6 +137,9 @@ func (a *app) refreshGit() {
 			go func() {
 				t, refs, err := remoteGitMeta(r)
 				a.post(func() {
+					if g.repo != r {
+						return
+					}
 					g.metaRunning = false
 					if g.repo == r && err == nil {
 						a.tookGitMeta(t, refs)
@@ -165,10 +170,10 @@ func (a *app) refreshGit() {
 			remotes, remotesErr = r.Remotes()
 		}
 		a.post(func() {
-			g.running, g.read = false, time.Now()
 			if g.repo != r {
 				return
 			}
+			g.running, g.read = false, time.Now()
 			if err != nil {
 				return
 			}
@@ -189,8 +194,8 @@ func (a *app) historyKey() string {
 	if st == nil {
 		return ""
 	}
-	return fmt.Sprintf("%s|%s|%d|%d|%d|%d|%t|%d", st.Head, st.Upstream, st.Ahead, st.Behind, max(g.historyN, historyPage),
-		len(g.remotes), a.settings.ScmAllBranches, g.refsGen)
+	return fmt.Sprintf("%s|%s|%d|%d|%d|%d|%t|%d|%s", st.Head, st.Upstream, st.Ahead, st.Behind, max(g.historyN, historyPage),
+		len(g.remotes), a.settings.ScmAllBranches, g.refsGen, g.historyRef)
 }
 
 // refreshHistory reads the last commits again in the background when HEAD
@@ -201,6 +206,10 @@ func (a *app) refreshHistory() {
 	if g.repo == nil || st == nil || g.loadingHistory {
 		return
 	}
+	if g.historyRef != "" && g.historyRefOf != st.Head+":"+st.Branch {
+		g.historyRef, g.historyRefOf = "", ""
+		g.historyN = historyPage
+	}
 	n := max(g.historyN, historyPage)
 	key := a.historyKey()
 	if key == g.historyOf {
@@ -209,18 +218,25 @@ func (a *app) refreshHistory() {
 	g.loadingHistory = true
 	// Without a remote nothing is pushed or not: no commit is marked.
 	r, remotes, all := g.repo, len(g.remotes) > 0, a.settings.ScmAllBranches
+	ref := g.historyRef
 	go func() {
-		cs, err := r.Log(n, all)
+		var cs []git.Commit
+		var err error
+		if ref == "" {
+			cs, err = r.Log(n, all)
+		} else {
+			cs, err = r.LogRef(ref, n)
+		}
 		var unpushed map[string]bool
 		if remotes {
 			unpushed = r.Unpushed(n)
 		}
 		tags, _ := r.Tags()
 		a.post(func() {
-			g.loadingHistory = false
 			if g.repo != r {
 				return
 			}
+			g.loadingHistory = false
 			g.historyOf = key
 			if err != nil {
 				return
@@ -369,6 +385,7 @@ func (a *app) branch() string {
 // gitChanged has the documents read their bases again, and the status be
 // read again, as when a commit may have been made.
 func (a *app) gitChanged() {
+	a.invalidateScmPanels()
 	for _, d := range a.docs {
 		d.git.HeadMoved()
 	}
@@ -380,6 +397,15 @@ func (a *app) gitChanged() {
 // busy while it runs when busy is set, then reads the status again and
 // calls then, unless it failed: then it says why.
 func (a *app) gitDo(busy string, fn func(r *git.Repo) error, then func()) {
+	a.gitTask(busy, true, fn, then)
+}
+
+// Read-only commands retain the expanded histories and their loaded pages.
+func (a *app) gitRead(busy string, fn func(r *git.Repo) error, then func()) {
+	a.gitTask(busy, false, fn, then)
+}
+
+func (a *app) gitTask(busy string, refresh bool, fn func(r *git.Repo) error, then func()) {
 	g := &a.git
 	r := g.repo
 	if r == nil {
@@ -399,11 +425,16 @@ func (a *app) gitDo(busy string, fn func(r *git.Repo) error, then func()) {
 	go func() {
 		err := fn(r)
 		a.post(func() {
+			if g.repo != r {
+				return
+			}
 			g.pending--
 			if busy != "" {
 				g.busy = ""
 			}
-			a.gitChanged()
+			if refresh {
+				a.gitChanged()
+			}
 			if err != nil {
 				a.gitFailed(err)
 				return

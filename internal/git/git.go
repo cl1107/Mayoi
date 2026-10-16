@@ -604,42 +604,53 @@ func (r *Repo) Branches() ([]string, error) {
 
 // Branch is a branch, local or of a remote, and its last commit.
 type Branch struct {
-	Name    string // as "main", or "origin/main" for a remote's
-	Remote  bool
-	Time    time.Time // when its last commit was made
-	Subject string    // the subject of its last commit
+	Name          string // as "main", or "origin/main" for a remote's
+	Remote        bool
+	Time          time.Time // when its last commit was made
+	Subject       string    // the subject of its last commit
+	Hash          string
+	Upstream      string // display name
+	UpstreamRef   string // full ref used for revision operations
+	Ahead, Behind int
+	Gone, Current bool
 }
 
 // BranchList returns the local branches and those of the remotes, the
 // one committed to last first.
 func (r *Repo) BranchList() ([]Branch, error) {
 	out, err := r.run(nil, "for-each-ref", "--sort=-committerdate",
-		"--format=%(refname)%1f%(committerdate:unix)%1f%(subject)", "refs/heads", "refs/remotes")
+		"--format=%(refname)%1f%(committerdate:unix)%1f%(objectname)%1f%(upstream:short)%1f%(upstream:track)%1f%(HEAD)%1f%(symref)%1f%(upstream)%1f%(subject)", "refs/heads", "refs/remotes")
 	if err != nil {
 		return nil, err
 	}
 	var bs []Branch
 	for _, line := range strings.Split(string(out), "\n") {
-		f := strings.SplitN(line, "\x1f", 3)
-		if len(f) < 3 {
+		f := strings.SplitN(line, "\x1f", 9)
+		if len(f) != 9 || f[6] != "" {
 			continue
 		}
-		var b Branch
+		b := Branch{Hash: f[2], Upstream: f[3], UpstreamRef: f[7], Current: f[5] == "*", Subject: f[8]}
 		switch {
 		case strings.HasPrefix(f[0], "refs/heads/"):
 			b.Name = strings.TrimPrefix(f[0], "refs/heads/")
 		case strings.HasPrefix(f[0], "refs/remotes/"):
 			b.Name, b.Remote = strings.TrimPrefix(f[0], "refs/remotes/"), true
-			if strings.HasSuffix(b.Name, "/HEAD") {
-				continue
-			}
 		default:
 			continue
 		}
-		if s, err := strconv.ParseInt(f[1], 10, 64); err == nil {
-			b.Time = time.Unix(s, 0)
+		if seconds, err := strconv.ParseInt(f[1], 10, 64); err == nil {
+			b.Time = time.Unix(seconds, 0)
 		}
-		b.Subject = f[2]
+		b.Gone = f[4] == "[gone]"
+		for _, track := range strings.Split(strings.Trim(f[4], "[]"), ", ") {
+			direction, count, _ := strings.Cut(track, " ")
+			switch direction {
+			case "ahead":
+				b.Ahead, _ = strconv.Atoi(count)
+			case "behind":
+				b.Behind, _ = strconv.Atoi(count)
+			}
+		}
 		bs = append(bs, b)
 	}
 	return bs, nil

@@ -1,0 +1,298 @@
+package git
+
+import (
+	"fmt"
+	"path/filepath"
+	"strings"
+	"testing"
+)
+
+func branchNamed(t *testing.T, r *Repo, name string) Branch {
+	t.Helper()
+	bs, err := r.BranchList()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, b := range bs {
+		if b.Name == name {
+			return b
+		}
+	}
+	t.Fatalf("missing branch %s in %+v", name, bs)
+	return Branch{}
+}
+
+func TestPanelBranchMetadataAndHistory(t *testing.T) {
+	r, git := repo(t)
+	git("update-ref", "refs/remotes/origin/main", "HEAD")
+	git("config", "branch.main.remote", "origin")
+	git("config", "branch.main.merge", "refs/heads/main")
+	git("config", "remote.origin.url", filepath.Join(t.TempDir(), "remote.git"))
+	git("config", "remote.origin.fetch", "+refs/heads/*:refs/remotes/origin/*")
+	git("switch", "-q", "-c", "incoming")
+	git("commit", "--allow-empty", "-qm", "incoming one")
+	git("commit", "--allow-empty", "-qm", "incoming two")
+	git("update-ref", "refs/remotes/origin/main", "HEAD")
+	git("switch", "-q", "main")
+	git("commit", "--allow-empty", "-qm", "local only")
+	b := branchNamed(t, r, "main")
+	if !b.Current || b.Remote || b.Hash == "" || b.Upstream != "origin/main" || b.Ahead != 1 || b.Behind != 2 || b.Gone {
+		t.Fatalf("branch metadata %+v", b)
+	}
+	incoming, err := r.LogRange("main", "origin/main", 10)
+	if err != nil || len(incoming) != 2 || incoming[0].Subject != "incoming two" || incoming[1].Subject != "incoming one" {
+		t.Fatalf("incoming %+v, %v", incoming, err)
+	}
+	outgoing, err := r.LogRange("origin/main", "main", 10)
+	if err != nil || len(outgoing) != 1 || outgoing[0].Subject != "local only" {
+		t.Fatalf("outgoing %+v, %v", outgoing, err)
+	}
+	history, err := r.LogRef("origin/main", 2)
+	if err != nil || len(history) != 2 || history[0].Hash != incoming[0].Hash {
+		t.Fatalf("history %+v, %v", history, err)
+	}
+	git("update-ref", "-d", "refs/remotes/origin/main")
+	if b := branchNamed(t, r, "main"); !b.Gone || b.Upstream != "origin/main" {
+		t.Fatalf("gone %+v", b)
+	}
+}
+
+func TestPanelBranchActions(t *testing.T) {
+	r, git := repo(t)
+	git("branch", "topic")
+	if err := r.RenameBranch("topic", "renamed"); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.DeleteBranch("renamed", false); err != nil {
+		t.Fatal(err)
+	}
+	git("switch", "-qc", "unmerged")
+	git("commit", "--allow-empty", "-qm", "unmerged work")
+	git("switch", "-q", "main")
+	if err := r.DeleteBranch("unmerged", false); err == nil {
+		t.Fatal("deleted unmerged branch")
+	}
+	if err := r.DeleteBranch("unmerged", true); err != nil {
+		t.Fatal(err)
+	}
+	git("update-ref", "refs/remotes/origin/topic", "HEAD")
+	git("config", "remote.origin.url", "unused")
+	git("config", "remote.origin.fetch", "+refs/heads/*:refs/remotes/origin/*")
+	if err := r.CheckoutTracking("origin/topic", "tracked"); err != nil {
+		t.Fatal(err)
+	}
+	if b := branchNamed(t, r, "tracked"); !b.Current || b.Upstream != "origin/topic" {
+		t.Fatalf("tracking %+v", b)
+	}
+	if err := r.CheckoutTracking("origin/topic", "main"); err == nil {
+		t.Fatal("overwrote local branch")
+	}
+}
+
+func TestPanelRemoteActions(t *testing.T) {
+	r, git := repo(t)
+	path := filepath.Join(t.TempDir(), "remote with spaces.git")
+	git("init", "-q", "--bare", path)
+	if err := r.AddRemote("origin", path); err != nil {
+		t.Fatal(err)
+	}
+	git("push", "-q", "origin", "main")
+	if err := r.SetRemoteURL("origin", path+".push", true); err != nil {
+		t.Fatal(err)
+	}
+	git("config", "--add", "remote.origin.pushurl", path+".second")
+	rs, err := r.RemoteList()
+	if err != nil || len(rs) != 1 {
+		t.Fatalf("remotes %+v, %v", rs, err)
+	}
+	if got := rs[0]; got.Name != "origin" || len(got.FetchURLs) != 1 || got.FetchURLs[0] != path || len(got.PushURLs) != 2 || got.PushURLs[0] != path+".push" {
+		t.Fatalf("URLs %+v", got)
+	}
+	if err := r.SetRemoteURL("origin", path, false); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.FetchRemote("origin", false); err != nil {
+		t.Fatal(err)
+	}
+	git("update-ref", "refs/remotes/origin/stale", "HEAD")
+	if err := r.PruneRemote("origin"); err != nil {
+		t.Fatal(err)
+	}
+	bs, err := r.BranchList()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, b := range bs {
+		if b.Name == "origin/stale" {
+			t.Fatal("prune kept stale branch")
+		}
+	}
+	git("update-ref", "refs/remotes/origin/stale", "HEAD")
+	if err := r.FetchRemote("origin", true); err != nil {
+		t.Fatal(err)
+	}
+	bs, err = r.BranchList()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, b := range bs {
+		if b.Name == "origin/stale" {
+			t.Fatal("fetch prune kept stale branch")
+		}
+	}
+	if err := r.RemoveRemote("origin"); err != nil {
+		t.Fatal(err)
+	}
+	rs, err = r.RemoteList()
+	if err != nil || len(rs) != 0 {
+		t.Fatalf("after removal %+v, %v", rs, err)
+	}
+}
+
+func TestPanelArgumentsAndMissingRefs(t *testing.T) {
+	r, _ := repo(t)
+	actions := []struct {
+		name string
+		run  func() error
+	}{
+		{"rename", func() error { return r.RenameBranch("main", "--force") }},
+		{"delete", func() error { return r.DeleteBranch("--all", false) }},
+		{"add", func() error { return r.AddRemote("--mirror", "x") }},
+		{"url", func() error { return r.AddRemote("origin", "--upload-pack=bad") }},
+		{"remove", func() error { return r.RemoveRemote("--all") }},
+		{"set", func() error { return r.SetRemoteURL("origin", "\ninvalid", false) }},
+		{"fetch", func() error { return r.FetchRemote("--all", false) }},
+		{"prune", func() error { return r.PruneRemote("--help") }},
+		{"track", func() error { return r.CheckoutTracking("--bad", "new") }},
+	}
+	for _, a := range actions {
+		t.Run(a.name, func(t *testing.T) {
+			if err := a.run(); err == nil {
+				t.Fatal("accepted unsafe argument")
+			}
+		})
+	}
+	for _, ref := range []string{"--all", "missing", "HEAD\n--all"} {
+		if _, err := r.LogRef(ref, 10); err == nil {
+			t.Errorf("accepted ref %q", ref)
+		}
+	}
+	if _, err := r.LogRange("main", "--all", 10); err == nil {
+		t.Fatal("accepted range option")
+	}
+	if _, err := r.LogRef("main", 0); err == nil || !strings.Contains(err.Error(), "positive") {
+		t.Fatalf("invalid limit: %v", err)
+	}
+	if b := branchNamed(t, r, "main"); !b.Current {
+		t.Fatal("argument validation mutated current branch")
+	}
+}
+
+func TestPanelUpstreamRefWithSameNamedLocalBranch(t *testing.T) {
+	r, git := repo(t)
+	// A local origin/main must never replace the configured remote upstream.
+	git("branch", "origin/main")
+	git("switch", "-qc", "remote-topic")
+	git("commit", "--allow-empty", "-qm", "remote incoming")
+	git("update-ref", "refs/remotes/origin/main", "HEAD")
+	git("switch", "-q", "main")
+	git("commit", "--allow-empty", "-qm", "local outgoing")
+	git("config", "remote.origin.url", filepath.Join(t.TempDir(), "remote.git"))
+	git("config", "remote.origin.fetch", "+refs/heads/*:refs/remotes/origin/*")
+	git("config", "branch.main.remote", "origin")
+	git("config", "branch.main.merge", "refs/heads/main")
+	b := branchNamed(t, r, "main")
+	if b.UpstreamRef != "refs/remotes/origin/main" || b.Ahead != 1 || b.Behind != 1 {
+		t.Fatalf("upstream metadata %+v", b)
+	}
+	incoming, err := r.LogRange("refs/heads/main", b.UpstreamRef, 10)
+	if err != nil || len(incoming) != 1 || incoming[0].Subject != "remote incoming" {
+		t.Fatalf("incoming %+v, %v", incoming, err)
+	}
+	outgoing, err := r.LogRange(b.UpstreamRef, "refs/heads/main", 10)
+	if err != nil || len(outgoing) != 1 || outgoing[0].Subject != "local outgoing" {
+		t.Fatalf("outgoing %+v, %v", outgoing, err)
+	}
+}
+
+func TestPanelPullSelectedBranch(t *testing.T) {
+	for _, current := range []bool{true, false} {
+		t.Run(fmt.Sprint("current=", current), func(t *testing.T) {
+			remote, upstream := repo(t)
+			r, local := repo(t)
+			local("remote", "add", "source", remote.Root)
+			local("fetch", "source")
+			local("switch", "-C", "selected", "--track", "source/main")
+			if !current {
+				local("switch", "main")
+			}
+			head := r.Head()
+			upstream("commit", "--allow-empty", "-qm", "new remote commit")
+			want := remote.Head()
+			if err := r.PullBranch("selected"); err != nil {
+				t.Fatal(err)
+			}
+			if got := branchNamed(t, r, "selected"); got.Hash != want || got.Behind != 0 {
+				t.Fatalf("branch after pull: %+v", got)
+			}
+			if !current && r.Head() != head {
+				t.Fatal("pull changed active checkout")
+			}
+			if err := r.PullBranch("selected"); err != nil {
+				t.Fatalf("up-to-date pull: %v", err)
+			}
+			if !current {
+				local("switch", "selected")
+			}
+			local("commit", "--allow-empty", "-qm", "local divergence")
+			selected := r.Head()
+			if !current {
+				local("switch", "main")
+			}
+			if err := r.PullBranch("selected"); err != nil {
+				t.Fatalf("locally ahead pull: %v", err)
+			}
+			if !current {
+				local("switch", "main")
+			}
+			upstream("commit", "--allow-empty", "-qm", "remote divergence")
+			if err := r.PullBranch("selected"); err == nil {
+				t.Fatal("diverged pull succeeded")
+			}
+			if got := branchNamed(t, r, "selected"); got.Hash != selected {
+				t.Fatal("diverged pull overwrote local branch")
+			}
+			if !current && r.Head() != head {
+				t.Fatal("failed pull changed active checkout")
+			}
+		})
+	}
+}
+
+func TestPanelPullBranchGuards(t *testing.T) {
+	remote, upstream := repo(t)
+	r, local := repo(t)
+	local("remote", "add", "source", remote.Root)
+	local("fetch", "source")
+	local("branch", "--track", "selected", "source/main")
+	local("worktree", "add", filepath.Join(t.TempDir(), "linked"), "selected")
+	before := branchNamed(t, r, "selected").Hash
+	upstream("commit", "--allow-empty", "-qm", "incoming")
+	if err := r.PullBranch("selected"); err == nil {
+		t.Fatal("updated branch checked out in another worktree")
+	}
+	if branchNamed(t, r, "selected").Hash != before {
+		t.Fatal("occupied branch moved")
+	}
+	for _, name := range []string{"main", "missing", "-option", "selected:other"} {
+		if err := r.PullBranch(name); err == nil {
+			t.Fatalf("pull %q should fail", name)
+		}
+	}
+	local("branch", "--track", "gone", "source/main")
+	upstream("switch", "-c", "replacement")
+	upstream("branch", "-D", "main")
+	if err := r.PullBranch("gone"); err == nil {
+		t.Fatal("deleted upstream pull succeeded")
+	}
+}

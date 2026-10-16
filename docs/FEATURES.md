@@ -124,6 +124,43 @@ tree, with a count of them. Files are grouped as merge changes, staged changes, 
 
 ### Commits
 
+The **REPOSITORY** panel switches between **Branches** and **Remotes** using
+horizontal icons in its header. Each view keeps its expanded branches and
+loaded history when switching tabs. Branch commits use compact indentation.
+
+**BRANCHES** lists local branches with their upstream, incoming/outgoing counts,
+last commit time and current-branch highlight. Hover for two seconds to see
+its upstream status and full last-commit time.
+Hover also reveals checkout and pull buttons. Pull fast-forwards the selected
+local branch from its configured upstream without switching inactive branches;
+diverged branches and branches checked out in another worktree stay protected.
+Expand a branch for its history
+and incoming/outgoing commits; load more to page through older commits. Its
+context menu switches, creates, renames, safely deletes, merges, rebases and
+compares branches. **REMOTES** expands into fetch/push URLs and remote branches,
+with tracking checkout, add/edit/remove, fetch and confirmed prune actions.
+Loading, errors, retry and empty states stay in the tree; opening a panel never
+implicitly fetches from the network. The view header’s Refresh button explicitly
+fetches all remotes before reloading status and expanded history. Remote branch
+rows offer Fetch Branch to fetch their configured remote without changing the
+local checkout; local branch rows retain fast-forward-only Pull Branch.
+
+Every commit in these trees and **COMMITS** shares the context menu. Alongside
+checkout, reset, revert, cherry-pick, merge, rebase and branch/tag creation, it
+can export/copy a binary-capable patch, compare in either direction with HEAD
+or another selected commit, and compare with tracked working files (untracked
+files are excluded). Comparisons open in a saveable diff document. Remote
+browsing and commit URL sharing support public GitHub, GitLab and Bitbucket;
+other providers report an unsupported-host error.
+
+**Recompose Commits from Here…** stages the selected commit through HEAD and
+fills in their combined messages for editing and committing again. It requires
+clean files and linear history and keeps the previous HEAD under a recovery
+ref. The original branch is updated with an expected-commit check and the
+backup refs are recorded in the same transaction. **Create Worktree…** creates a detached
+checkout at the selected commit in a new folder, after confirmation. AI change
+explanations require an AI integration and are not provided by these panels.
+
 Under the changes, **COMMITS** lists the last 50 commits of the branch, newest first, on a graph of their branches: a
 branch merged in runs in a lane and color of its own beside the one it joined. Each commit shows its author's initials,
 its branches and tags, and how long ago it was made. A ring marks HEAD, a small hollow dot a merge, and an arrow the

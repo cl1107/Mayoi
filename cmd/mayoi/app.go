@@ -190,16 +190,17 @@ type app struct {
 	// dragging is set while a tab is dragged, as the frame before found.
 	dragging, dragNow bool
 
-	quick      quickOpen
-	palette    []paletteEntry    // the commands of the command palette, made as it first opens
-	hints      map[string]string // the keys of the commands, as tooltips show them
-	branches   branchPicker      // the box that switches branches
-	recents    recentPicker      // the box of the recent folders
-	remotePick remotePicker      // the box that connects to a host
-	find       findState
-	inFiles    searchState // search in the files, of the sidebar
-	prompt     *prompt
-	confirm    *confirm
+	quick       quickOpen
+	palette     []paletteEntry    // the commands of the command palette, made as it first opens
+	hints       map[string]string // the keys of the commands, as tooltips show them
+	branches    branchPicker      // the box that switches branches
+	recents     recentPicker      // the box of the recent folders
+	remotePick  remotePicker      // the box that connects to a host
+	find        findState
+	inFiles     searchState // search in the files, of the sidebar
+	prompt      *prompt
+	commitTools commitTools
+	confirm     *confirm
 	// dialog is the dialog shown, which came in as it showed, and
 	// dialogBuilt says a build of the view built one.
 	dialog      string

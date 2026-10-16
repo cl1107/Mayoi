@@ -1,7 +1,7 @@
 {
   "name": "Mayoi",
   "identifier": "dev.mayoi.editor",
-  "version": "0.9.1",
+  "version": "0.10.0",
   "main": "./cmd/mayoi",
   "out": "build",
   "macos": {

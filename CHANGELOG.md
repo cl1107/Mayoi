@@ -32,6 +32,38 @@ needs a `## <version>` section here, or its build fails.
 - Deleting a review comment, or clearing them all, can be undone from
   its toast, and a comment being edited has a Delete button.
 - A review comment after its lines in a file shows on a tinted chip.
+
+- Keep Repository branches and expanded commits visible during background
+  refreshes, preventing loading flashes and layout jumps during sidebar
+  resizing, terminal activity and idle checks. Preserve loaded history pages.
+
+- Repository refresh now fetches remote updates before reloading branch status
+  and expanded history. Remote branch rows enable a fetch button without
+  switching or merging into the local working branch.
+
+- Branch rows reveal checkout and pull buttons on hover, with a detailed
+  upstream status and last-commit card after two seconds. Pull can safely
+  fast-forward an inactive local branch without switching the working tree.
+
+- Align Repository with the other Source Control section headers, reduce
+  the active view's subtitle, and align remote URLs and branch commits
+  with their parent nodes in the compact tree.
+
+- Source Control groups Branches and Remotes in one Repository panel with
+  horizontal icon tabs that preserve each view's expanded history. Branch
+  commits use tighter indentation without unused graph spacing.
+
+- Bump the local application version to **0.10.0** for the new Git panels.
+
+- Source Control adds expandable **Branches** and **Remotes** with upstream
+  status, paged history, incoming/outgoing commits, tracking checkout, branch
+  management and remote URL, fetch and prune actions.
+- Every commit in Source Control offers patches, directed comparisons,
+  repository browsing and sharing on GitHub/GitLab/Bitbucket, history reveal,
+  detached worktree creation, and safe recomposition with a recovery ref.
+- Git commands finishing after a folder switch no longer apply their results
+  or busy counters to the newly opened repository.
+
 - Lock a column from its tab menu to keep it for terminals: Move to Locked
   Right Column puts a running terminal there in one step. Files opened from
   the Explorer, Search, Quick Open or Source Control go to an unlocked
