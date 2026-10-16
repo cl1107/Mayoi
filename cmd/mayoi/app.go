@@ -125,6 +125,7 @@ type app struct {
 	// file it should choose once its row shows.
 	treeSynced, selectInTree string
 	git                      gitState
+	commitTools              commitTools
 	scm                      scmState
 
 	// ignored is what Git ignores in the workspace, which the tree shows

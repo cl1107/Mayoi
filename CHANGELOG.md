@@ -93,6 +93,9 @@ needs a `## <version>` section here, or its build fails.
   settings, and programs in the terminal that read the clipboard can take
   pasted images. Mayoi still builds on a fork of it, with one change to
   draw long files with less work until it is released upstream.
+- A commit's menu saves or copies its patch, binary changes included,
+  compares it with HEAD or with a commit chosen before, and opens it on
+  GitHub, GitLab or Bitbucket.
 
 ## 0.9.1
 

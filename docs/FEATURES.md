@@ -224,6 +224,11 @@ A comment follows its lines as the file changes. When they are no longer in the 
 quotes the lines as they were. Comments not sent are kept with the folder's session, so they are there again at the
 next start.
 
+Commit menus also offer **Create Patch…** and **Copy Changes (Patch)**, including binary changes and root commits.
+**Compare HEAD to Here** and **Compare Here to HEAD** open a patch in the chosen direction; **Select for Compare**
+then **Compare with Selected** compares two commits from the same repository. **Open Commit on Remote** supports
+GitHub, GitLab and Bitbucket, preferring a unique remote decoration, then the current upstream, origin or the first remote.
+
 ### Branches and remotes
 
 Source Control's **REPOSITORY** panel sits below **COMMITS**, starts collapsed and remembers whether it is open and its selected tab.

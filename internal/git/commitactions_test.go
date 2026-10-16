@@ -1,0 +1,146 @@
+package git
+
+import (
+	"strings"
+	"testing"
+)
+
+func actionHash(t *testing.T, r *Repo, ref string) string {
+	t.Helper()
+	h, err := r.commitRevision(ref)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return h
+}
+
+func TestCommitPatchRootMergeAndBinary(t *testing.T) {
+	r, git := repo(t)
+	patch, err := r.CommitPatch("HEAD")
+	if err != nil || !strings.Contains(patch, "new file mode") || !strings.Contains(patch, "+bee") {
+		t.Fatalf("root patch %q, %v", patch, err)
+	}
+	git("switch", "-qc", "side")
+	write(t, r.Root, "binary", "\x00\x01\x02\x03")
+	git("add", ".")
+	git("commit", "-qm", "binary")
+	git("switch", "-q", "main")
+	git("commit", "--allow-empty", "-qm", "main change")
+	git("merge", "--no-ff", "-qm", "merge", "side")
+	patch, err = r.CommitPatch("HEAD")
+	if err != nil || !strings.Contains(patch, "GIT binary patch") {
+		t.Fatalf("merge patch %q, %v", patch, err)
+	}
+	if _, err := r.run([]byte(patch), "apply", "--reverse", "--check", "--binary", "-"); err != nil {
+		t.Fatalf("patch cannot be reversed: %v", err)
+	}
+}
+
+func TestComparePatchDirection(t *testing.T) {
+	r, git := repo(t)
+	first := actionHash(t, r, "HEAD")
+	write(t, r.Root, "b.txt", "new\n")
+	git("add", ".")
+	git("commit", "-qm", "second")
+	patch, err := r.ComparePatch(first, "HEAD")
+	if err != nil || !strings.Contains(patch, "-bee\n+new") {
+		t.Fatalf("forward patch %q, %v", patch, err)
+	}
+	patch, err = r.ComparePatch("HEAD", first)
+	if err != nil || !strings.Contains(patch, "-new\n+bee") {
+		t.Fatalf("reverse patch %q, %v", patch, err)
+	}
+
+	for _, invalid := range []string{"", "--output=/tmp/bad", "HEAD\nHEAD", "missing"} {
+		if _, err := r.CommitPatch(invalid); err == nil {
+			t.Errorf("accepted revision %q", invalid)
+		}
+		if _, err := r.ComparePatch("HEAD", invalid); err == nil {
+			t.Errorf("accepted comparison revision %q", invalid)
+		}
+	}
+}
+
+func TestRemoteWebURL(t *testing.T) {
+	hash := strings.Repeat("a", 40)
+	for _, tc := range []struct {
+		raw, suffix string
+	}{
+		{"https://user:secret@github.com/org/repo.git?token=secret#fragment", "/org/repo/commit/"},
+		{"git@github.com:org/repo.git", "/org/repo/commit/"},
+		{"ssh://git@gitlab.com:2222/group/sub/repo.git", "/group/sub/repo/-/commit/"},
+		{"https://gitlab.com/group/repo.git", "/group/repo/-/commit/"},
+		{"git@bitbucket.org:org/repo.git", "/org/repo/commits/"},
+		{"https://bitbucket.org/org/repo.git", "/org/repo/commits/"},
+	} {
+		got, err := RemoteWebURL(tc.raw, hash)
+		if err != nil || !strings.HasSuffix(got, tc.suffix+hash) || strings.Contains(got, "secret") || !strings.HasPrefix(got, "https://") {
+			t.Errorf("%q => %q, %v", tc.raw, got, err)
+		}
+	}
+	for _, raw := range []string{"https://unknown.test/org/repo.git", "file:///tmp/repo", "https://github.com/org/../repo", "https://github.com/repo"} {
+		if _, err := RemoteWebURL(raw, hash); err == nil {
+			t.Errorf("accepted %q", raw)
+		}
+	}
+	if _, err := RemoteWebURL("https://github.com/org/repo", "HEAD"); err == nil {
+		t.Fatal("accepted non-hash")
+	}
+}
+
+func TestCommitRemoteURLChoosesDecorationUpstreamAndFallback(t *testing.T) {
+	r, git := repo(t)
+	hash := actionHash(t, r, "HEAD")
+	if _, err := r.CommitRemoteURL(Commit{Hash: hash}); err == nil {
+		t.Fatal("accepted repository without remotes")
+	}
+	git("remote", "add", "aaa", "git@github.com:aaa/repo.git")
+	git("remote", "add", "origin", "git@github.com:origin/repo.git")
+	git("remote", "add", "team", "git@github.com:team/repo.git")
+	git("remote", "add", "team/fork", "git@github.com:fork/repo.git")
+	check := func(cm Commit, owner string) {
+		t.Helper()
+		got, err := r.CommitRemoteURL(cm)
+		want := "https://github.com/" + owner + "/repo/commit/" + hash
+		if err != nil || got != want {
+			t.Fatalf("URL = %q, %v; want %q", got, err, want)
+		}
+	}
+	check(Commit{Hash: hash}, "origin")
+	git("update-ref", "refs/remotes/team/main", hash)
+	git("config", "branch.main.remote", "team")
+	git("config", "branch.main.merge", "refs/heads/main")
+	check(Commit{Hash: hash}, "team")
+	check(Commit{Hash: hash, Refs: []Ref{{Kind: RefRemote, Name: "team/fork/main"}}}, "fork")
+	check(Commit{Hash: hash, Refs: []Ref{{Kind: RefRemote, Name: "origin/main"}, {Kind: RefRemote, Name: "team/fork/main"}}}, "team")
+	git("config", "--unset", "branch.main.remote")
+	git("remote", "remove", "origin")
+	check(Commit{Hash: hash}, "aaa")
+}
+
+func TestCommitPatchesRemainApplicableWithForcedColor(t *testing.T) {
+	r, git := repo(t)
+	write(t, r.Root, "b.txt", "changed\n")
+	git("commit", "-qam", "second")
+	git("config", "color.diff", "always")
+	for _, tc := range []struct {
+		name string
+		read func() (string, error)
+	}{
+		{"commit", func() (string, error) { return r.CommitPatch("HEAD") }},
+		{"comparison", func() (string, error) { return r.ComparePatch("HEAD^", "HEAD") }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			patch, err := tc.read()
+			if err != nil {
+				t.Fatal(err)
+			}
+			if strings.Contains(patch, "\x1b") {
+				t.Fatal("patch contains terminal color escapes")
+			}
+			if _, err := r.run([]byte(patch), "apply", "--reverse", "--check", "-"); err != nil {
+				t.Fatalf("patch cannot be applied: %v", err)
+			}
+		})
+	}
+}

@@ -1214,6 +1214,7 @@ func (a *app) scmCommitMenu(m *ui.Menu, cm *git.Commit, head bool, action *func(
 			*action = a.undoCommit
 		}
 	}
+	a.commitToolsMenu(m, *cm, action)
 }
 
 // toggleAllBranches has the commits show every branch and tag, or only
