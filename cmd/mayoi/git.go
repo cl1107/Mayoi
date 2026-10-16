@@ -135,8 +135,11 @@ func (a *app) refreshGit() {
 			go func() {
 				t, refs, err := remoteGitMeta(r)
 				a.post(func() {
+					if g.repo != r {
+						return
+					}
 					g.metaRunning = false
-					if g.repo == r && err == nil {
+					if err == nil {
 						a.tookGitMeta(t, refs)
 					}
 				})
@@ -165,10 +168,10 @@ func (a *app) refreshGit() {
 			remotes, remotesErr = r.Remotes()
 		}
 		a.post(func() {
-			g.running, g.read = false, time.Now()
 			if g.repo != r {
 				return
 			}
+			g.running, g.read = false, time.Now()
 			if err != nil {
 				return
 			}
@@ -217,10 +220,10 @@ func (a *app) refreshHistory() {
 		}
 		tags, _ := r.Tags()
 		a.post(func() {
-			g.loadingHistory = false
 			if g.repo != r {
 				return
 			}
+			g.loadingHistory = false
 			g.historyOf = key
 			if err != nil {
 				return
@@ -399,6 +402,9 @@ func (a *app) gitDo(busy string, fn func(r *git.Repo) error, then func()) {
 	go func() {
 		err := fn(r)
 		a.post(func() {
+			if g.repo != r {
+				return
+			}
 			g.pending--
 			if busy != "" {
 				g.busy = ""

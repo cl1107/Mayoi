@@ -27,6 +27,9 @@ needs a `## <version>` section here, or its build fails.
   behind.
 - A paste to or from a remote host canceled before it starts copies
   nothing; a small one could still arrive.
+- Git work still running in a folder you switch away from no longer lands
+  in the new folder's Source Control, where it cleared its busy message or
+  loading state and ran its follow-ups.
 - Selecting a file anywhere in its Explorer row switches to its editor,
   including clicks in the space beside its name, and moving through the
   Explorer with the arrow keys previews each file in turn.
