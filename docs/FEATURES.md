@@ -226,6 +226,16 @@ next start.
 
 ### Branches and remotes
 
+Source Control's **REPOSITORY** panel starts collapsed and remembers whether it is open and its selected tab.
+**Branches** lists the current branch first, then the most recently committed branches, with their upstream and ahead/behind
+counts. Expand a branch for its history and any incoming or outgoing commits; **Load more** reads another page.
+**Remotes** lists the configured remotes. Expand a remote to read its fetch and push URLs and remote branches.
+Panel data loads when it is opened, and branch history loads when that branch is expanded.
+
+Branch rows offer checkout and pull; a remote branch's **Fetch Remote** fetches its whole remote. Context menus offer
+branch creation, rename, deletion, merge and rebase, and remote creation, URL editing, removal, fetch and prune.
+Deletion refuses unmerged branches. **Refresh** rereads local refs; **Fetch** contacts the remote.
+
 The branch in the status bar shows how far it is ahead of its upstream (↑) and behind it (↓). Click it to switch
 branches, create one, or fetch, pull and push. Switching waits until open files are saved.
 

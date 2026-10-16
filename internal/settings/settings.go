@@ -113,6 +113,10 @@ type Prefs struct {
 	// ScmAllBranches has the commits of source control show every branch
 	// and tag, not only the history of the branch checked out.
 	ScmAllBranches bool `json:"scmAllBranches,omitempty"`
+	// ScmRepositoryOpen remembers whether the repository panel is expanded.
+	ScmRepositoryOpen bool `json:"scmRepositoryOpen,omitempty"`
+	// ScmRemotes selects Remotes instead of Branches in the repository panel.
+	ScmRemotes bool `json:"scmRemotes,omitempty"`
 	// Blame shows who last changed the caret's line, and when, after it.
 	Blame bool `json:"blame"`
 	// Vim edits with vim's keys: the editors start in normal mode.

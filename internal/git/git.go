@@ -604,10 +604,15 @@ func (r *Repo) Branches() ([]string, error) {
 
 // Branch is a branch, local or of a remote, and its last commit.
 type Branch struct {
-	Name    string // as "main", or "origin/main" for a remote's
-	Remote  bool
-	Time    time.Time // when its last commit was made
-	Subject string    // the subject of its last commit
+	Name          string // as "main", or "origin/main" for a remote's
+	Remote        bool
+	Time          time.Time // when its last commit was made
+	Subject       string    // the subject of its last commit
+	Hash          string
+	Upstream      string // display name
+	UpstreamRef   string // full ref used for revision operations
+	Ahead, Behind int
+	Gone, Current bool
 }
 
 // BranchList returns the local branches and those of the remotes, the

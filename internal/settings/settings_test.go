@@ -315,3 +315,18 @@ func TestMigrateTheme(t *testing.T) {
 		}
 	}
 }
+
+func TestScmRepositoryPreferencesRoundTrip(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "settings.json")
+	s := Load(path)
+	if s.ScmRepositoryOpen {
+		t.Fatal("repository panel must default collapsed")
+	}
+	s.ScmRepositoryOpen, s.ScmRemotes = true, true
+	s.Changed()
+	s.Flush()
+	got := Load(path)
+	if !got.ScmRepositoryOpen || !got.ScmRemotes {
+		t.Fatal("repository panel preferences were not saved")
+	}
+}

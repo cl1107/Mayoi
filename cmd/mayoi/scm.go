@@ -47,10 +47,13 @@ type scmRow struct {
 	dir   string
 	name  string
 	depth int
+	panel *scmPanelRow
 }
 
 // file reports whether a row is a file's.
-func (r *scmRow) file() bool { return !r.header && r.commit == nil && !r.more && r.dir == "" }
+func (r *scmRow) file() bool {
+	return r.panel == nil && !r.header && r.commit == nil && !r.more && r.dir == ""
+}
 
 // scmState is the source control view's: its list, the row chosen, and
 // the groups closed.
@@ -72,6 +75,8 @@ type scmState struct {
 	rowsHistory   int
 	rowsDirs      int
 	rowsTree      bool
+	panels        scmPanels
+	rowsPanels    int
 }
 
 // groupEntries returns the files of each group, by path. They are worked
@@ -121,7 +126,7 @@ func (a *app) scmRows() []scmRow {
 	g := &a.git
 	tree := a.settings.ScmTree
 	if s.rows != nil && s.rowsOf == g.status && s.rowsCollapsed == s.collapsed && s.rowsHistory == g.historyGen &&
-		s.rowsDirs == s.dirsGen && s.rowsTree == tree {
+		s.rowsDirs == s.dirsGen && s.rowsTree == tree && s.rowsPanels == s.panels.gen {
 		return s.rows
 	}
 	var rows []scmRow
@@ -142,6 +147,7 @@ func (a *app) scmRows() []scmRow {
 			rows = append(rows, scmRow{group: scmGroup(g), e: e, key: fmt.Sprintf("%d:%s", g, e.Path)})
 		}
 	}
+	rows = a.scmPanelRows(rows)
 	if h := g.history; len(h) > 0 {
 		rows = append(rows, scmRow{group: groupCommits, header: true, count: len(h), key: "group:commits"})
 		if !s.collapsed[groupCommits] {
@@ -153,6 +159,7 @@ func (a *app) scmRows() []scmRow {
 			}
 		}
 	}
+	s.rowsPanels = s.panels.gen
 	s.rows, s.rowsOf, s.rowsCollapsed, s.rowsHistory = rows, g.status, s.collapsed, g.historyGen
 	s.rowsDirs, s.rowsTree = s.dirsGen, tree
 	// A refresh or a collapsed folder must not leave invisible files chosen.
@@ -310,6 +317,7 @@ func (a *app) scmView(c *ui.Context) {
 		a.subjectLength(c)
 		a.commitButton(c)
 	})
+	a.refreshScmPanels()
 	rows := a.scmRows()
 	s := &a.scm
 	if g.status != nil && len(g.status.Entries) == 0 {
@@ -328,6 +336,8 @@ func (a *app) scmView(c *ui.Context) {
 	}
 	s.list.Label = func(i int) string {
 		switch r := rows[i]; {
+		case r.panel != nil:
+			return r.panel.label
 		case r.header:
 			return ""
 		case r.dir != "":
@@ -349,6 +359,8 @@ func (a *app) scmView(c *ui.Context) {
 	var action func()
 	out := ui.List(c.Key("scm"), &s.list, len(rows), func(i int) {
 		switch r := rows[i]; {
+		case r.panel != nil:
+			a.scmPanelRowView(c, r, &action)
 		case r.header:
 			a.scmHeader(c, r, &action)
 		case r.commit != nil:
@@ -417,6 +429,8 @@ func (a *app) scmView(c *ui.Context) {
 	}
 	if s.row >= 0 && s.row < len(rows) && out.Submitted() {
 		switch r := rows[s.row]; {
+		case r.panel != nil:
+			a.activateScmPanelRow(r)
 		case r.dir != "":
 			a.toggleDir(r)
 		case r.commit != nil:
@@ -891,21 +905,27 @@ func (a *app) scmCommit(c *ui.Context, i int, r scmRow, action *func()) {
 		}
 		tip += "\n" + strings.Join(names, ", ")
 	}
-	row := ui.Row(c).Grow(1).Gap(6).AlignItems(ui.Center).Height(22).Padding(0, 4, 0, 6).Tooltip(tip)
+	indent := float32(6)
+	if r.at < 0 {
+		indent = scmPanelContentIndent(r.depth)
+	}
+	row := ui.Row(c).Grow(1).Gap(6).AlignItems(ui.Center).Height(22).Padding(0, 4, 0, indent).Tooltip(tip)
 	clicked := row.Clicked()
 	row.ContextMenu(func(m *ui.Menu) { a.scmCommitMenu(m, cm, head, action) })
 	graph := a.historyGraph()
 	var gr *graphRow
-	if r.at < len(graph) {
+	if r.at >= 0 && r.at < len(graph) {
 		gr = &graph[r.at]
 	}
 	lanes := min(graphLanes(graph), graphMaxLanes)
 	row.Children(func() {
-		ui.Box(c).Size(graphLaneW*float32(lanes-1)+12, 22).Shrink(0).Draw(func(pt *ui.Painter, b ui.Rect) {
-			if gr != nil {
-				a.paintGraphRow(pt, b, gr, cm, head)
-			}
-		})
+		if r.at >= 0 {
+			ui.Box(c).Size(graphLaneW*float32(lanes-1)+12, 22).Shrink(0).Draw(func(pt *ui.Painter, b ui.Rect) {
+				if gr != nil {
+					a.paintGraphRow(pt, b, gr, cm, head)
+				}
+			})
+		}
 		author := avatarColor(p, cm.Email+cm.Author)
 		ui.Box(c).Size(15, 15).Shrink(0).Draw(func(pt *ui.Painter, b ui.Rect) {
 			pt.Fill(b, author.Alpha(0.22), b.W/2)

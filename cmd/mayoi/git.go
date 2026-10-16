@@ -372,6 +372,7 @@ func (a *app) branch() string {
 // gitChanged has the documents read their bases again, and the status be
 // read again, as when a commit may have been made.
 func (a *app) gitChanged() {
+	a.invalidateScmPanels()
 	for _, d := range a.docs {
 		d.git.HeadMoved()
 	}

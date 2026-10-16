@@ -13,6 +13,8 @@ func lucide(body string) *ui.SVG {
 }
 
 var (
+	iconCheckout     = lucide(`<path d="M9 5H7a4 4 0 0 0 0 8h13"/><path d="m16 9 4 4-4 4"/>`)
+	iconCloud        = lucide(`<path d="M20 16.2A4.5 4.5 0 0 0 18 7.7a6 6 0 0 0-11.6 1.8A3.5 3.5 0 0 0 6 16.5h13"/>`)
 	iconX            = lucide(`<path d="M18 6 6 18"/><path d="m6 6 12 12"/>`)
 	iconPlus         = lucide(`<path d="M5 12h14"/><path d="M12 5v14"/>`)
 	iconChevronDown  = lucide(`<path d="m6 9 6 6 6-6"/>`)
