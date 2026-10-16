@@ -96,7 +96,7 @@ func TestCommitRemoteURLChoosesDecorationUpstreamAndFallback(t *testing.T) {
 	}
 	git("remote", "add", "aaa", "git@github.com:aaa/repo.git")
 	git("remote", "add", "origin", "git@github.com:origin/repo.git")
-	git("remote", "add", "team", "git@github.com:team/repo.git")
+	git("remote", "add", "upstream", "git@github.com:upstream/repo.git")
 	git("remote", "add", "team/fork", "git@github.com:fork/repo.git")
 	check := func(cm Commit, owner string) {
 		t.Helper()
@@ -107,12 +107,12 @@ func TestCommitRemoteURLChoosesDecorationUpstreamAndFallback(t *testing.T) {
 		}
 	}
 	check(Commit{Hash: hash}, "origin")
-	git("update-ref", "refs/remotes/team/main", hash)
-	git("config", "branch.main.remote", "team")
+	git("update-ref", "refs/remotes/upstream/main", hash)
+	git("config", "branch.main.remote", "upstream")
 	git("config", "branch.main.merge", "refs/heads/main")
-	check(Commit{Hash: hash}, "team")
+	check(Commit{Hash: hash}, "upstream")
 	check(Commit{Hash: hash, Refs: []Ref{{Kind: RefRemote, Name: "team/fork/main"}}}, "fork")
-	check(Commit{Hash: hash, Refs: []Ref{{Kind: RefRemote, Name: "origin/main"}, {Kind: RefRemote, Name: "team/fork/main"}}}, "team")
+	check(Commit{Hash: hash, Refs: []Ref{{Kind: RefRemote, Name: "origin/main"}, {Kind: RefRemote, Name: "team/fork/main"}}}, "upstream")
 	git("config", "--unset", "branch.main.remote")
 	git("remote", "remove", "origin")
 	check(Commit{Hash: hash}, "aaa")
