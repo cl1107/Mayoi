@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -243,7 +244,13 @@ func (a *app) scmPanelRows(rows []scmRow) []scmRow {
 		if b.Gone {
 			detail += " · gone"
 		} else if b.Upstream != "" {
-			detail += fmt.Sprintf(" · %d↓ %d↑", b.Behind, b.Ahead)
+			// As the status bar counts them, leaving out a direction at 0.
+			if b.Behind > 0 {
+				detail += fmt.Sprintf(" ↓%d", b.Behind)
+			}
+			if b.Ahead > 0 {
+				detail += fmt.Sprintf(" ↑%d", b.Ahead)
+			}
 		}
 		if !b.Time.IsZero() {
 			detail += " · " + shortAgo(b.Time, time.Now())
@@ -322,12 +329,21 @@ func (a *app) scmPanelRows(rows []scmRow) []scmRow {
 			if p.closed[key] {
 				continue
 			}
+			// A remote that pushes where it fetches, as most do, has one row
+			// for its URL.
+			fetchKind, same := "fetch", slices.Equal(remote.FetchURLs, remote.PushURLs)
+			if same {
+				fetchKind = "fetch, push"
+			}
 			for _, url := range remote.FetchURLs {
-				q := panelRow("url", key+":fetch:"+url, url, "fetch", 2)
+				q := panelRow("url", key+":fetch:"+url, url, fetchKind, 2)
 				q.panel.remote = remote
 				rows = append(rows, q)
 			}
 			for _, url := range remote.PushURLs {
+				if same {
+					break
+				}
 				q := panelRow("url", key+":push:"+url, url, "push", 2)
 				q.panel.remote = remote
 				rows = append(rows, q)
@@ -492,12 +508,16 @@ func (a *app) scmPanelRowView(c *ui.Context, r scmRow, action *func()) {
 		if q.branch != nil && q.branch.Current {
 			col = p.accent
 		}
+		if q.kind == "url" {
+			// Which way the URL goes leads, so a long URL cannot cut it off.
+			ui.Text(c, q.detail).FontSize(11).TextColor(p.muted).SingleLine().Shrink(0)
+		}
 		text := ui.Text(c, q.label).FontSize(12.5).TextColor(col).SingleLine().Shrink(1)
 		if r.header {
 			text.FontSize(10).FontWeight(500).LetterSpacing(0.2).TextColor(p.muted)
 			ui.Text(c, fmt.Sprint(r.count)).FontSize(10).TextColor(p.faint)
 		}
-		if q.detail != "" {
+		if q.detail != "" && q.kind != "url" {
 			ui.Text(c, q.detail).FontSize(11).TextColor(p.muted).SingleLine().Shrink(2)
 		}
 		ui.Spacer(c)
@@ -610,7 +630,7 @@ func (a *app) scmPanelMenu(m *ui.Menu, r scmRow, action *func()) {
 				a.gitDo("Fetching…", func(repo *git.Repo) error { return repo.FetchRemote(remote.Name, false) }, nil)
 			}
 		}
-		if m.Item("Fetch and Prune").Disabled(busy).Chosen() {
+		if m.Item("Fetch and Prune…").Disabled(busy).Chosen() {
 			*action = func() {
 				a.askPrunePanelRemote(remote.Name, true)
 			}

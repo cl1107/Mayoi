@@ -71,6 +71,9 @@ func TestScmBranchRemotePanels(t *testing.T) {
 	if !main.panel.branch.Current || main.panel.branch.Upstream != "origin/main" {
 		t.Fatalf("branch metadata: %+v", main.panel.branch)
 	}
+	if main.panel.detail != "origin/main · now" {
+		t.Fatalf("an even branch counts nothing: %q", main.panel.detail)
+	}
 	if err := hs.tt.RightClick("topic"); err != nil {
 		t.Fatal(err)
 	}
@@ -99,6 +102,15 @@ func TestScmBranchRemotePanels(t *testing.T) {
 	remote := findPanelRow(t, hs, "panel:remote:origin")
 	a.activateScmPanelRow(remote)
 	settleScmPanels(t, hs)
+	var urls []string
+	for _, r := range a.scmRows() {
+		if r.panel != nil && r.panel.kind == "url" {
+			urls = append(urls, r.panel.detail+" "+r.panel.label)
+		}
+	}
+	if len(urls) != 1 || urls[0] != "fetch, push "+hs.root {
+		t.Fatalf("a remote that pushes where it fetches has one URL row: %q", urls)
+	}
 	remoteBranch := findPanelRow(t, hs, "panel:branch:refs/remotes/origin/main")
 	a.activateScmPanelRow(remoteBranch)
 	settleScmPanels(t, hs)
@@ -350,7 +362,7 @@ func TestScmPanelDialogsStayWithRepository(t *testing.T) {
 		{"topic", "Delete Branch…"},
 		{"origin", "Remove Remote…"},
 		{"origin", "Prune Remote…"},
-		{"origin", "Fetch and Prune"},
+		{"origin", "Fetch and Prune…"},
 	} {
 		tab := scmRemotesTab
 		if tc.row == "topic" {
